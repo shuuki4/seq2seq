@@ -12,7 +12,7 @@ class SeqData:
         Data format should be [(from_sequence, to_sequence), ....]
         """
         self.max_length = None
-        self.num_symbols = None
+        self.symbols = None
 
         self.train_sequences = list()
         self.val_sequences = list()
@@ -26,33 +26,41 @@ class SeqData:
         return len(self.val_sequences)
 
     @property
+    def num_symbols(self):
+        return len(self.symbols)
+
+    @property
+    def idx_to_symbol(self, symbol_idx):
+        return self.symbols[symbol_idx]
+
+    @property
     def initialized(self):
         return (self.max_length is not None) or (self.num_symbols is not None)
 
-    def _next_batch(self, data, idxs, batch_size):
+    def _next_batch(self, data, batch_idxs, batch_size):
         """
-        Generate next batch. If len(idxs) < batch_size, pad with empty sequences
+        Generate next batch. If len(batch_idxs) < batch_size, pad with empty sequences
         :param data: data list to process
-        :param idxs: idxs to process
+        :param batch_idxs: idxs to process
         :return: next data dict of batch_size amount data
         """
-        def _normalize_length(data):
-            return data + [0] * (self.max_length - len(data))
+        def _normalize_length(_data):
+            return _data + [0] * (self.max_length - len(_data))
 
         def _empty_data():
             return _normalize_length([])
 
-        assert(len(idxs) <= batch_size)
+        assert(len(batch_idxs) <= batch_size)
 
         from_data, from_lengths, to_data, to_lengths = [], [], [], []
-        for idx in idxs:
+        for idx in batch_idxs:
             from_sequence, to_sequence = data[idx]
             from_lengths.append(len(from_sequence))
             to_lengths.append(len(to_sequence))
-            from_data.append(_normalize_length(from_data))
-            to_data.append(_normalize_length(to_data))
+            from_data.append(_normalize_length(from_sequence))
+            to_data.append(_normalize_length(to_sequence))
 
-        for _ in range(batch_size - len(idxs)):
+        for _ in range(batch_size - len(batch_idxs)):
             from_lengths.append(0)
             to_lengths.append(0)
             from_data.append(_empty_data())
@@ -62,7 +70,7 @@ class SeqData:
             'encoder_inputs': np.asarray(from_data, dtype=np.int32),
             'encoder_lengths': np.asarray(from_lengths, dtype=np.int32),
             'decoder_inputs': np.asarray(to_data, dtype=np.int32),
-            'decoder_outputs': np.asarray(to_lengths, dtype=np.int32)
+            'decoder_lengths': np.asarray(to_lengths, dtype=np.int32)
         }
         return batch_data_dict
 

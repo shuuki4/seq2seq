@@ -8,6 +8,7 @@ from tensorflow.contrib.seq2seq import AttentionWrapper, AttentionWrapperState, 
                                        BasicDecoder, BeamSearchDecoder, dynamic_decode, \
                                        TrainingHelper, sequence_loss
 
+
 class Seq2SeqModel:
 
     PAD = 0
@@ -21,21 +22,22 @@ class Seq2SeqModel:
 
     def _build_graph(self):
         inputs = self._build_placeholder()
-        encoder_outputs, encoder_state = self._build_encoder(inputs['encoder_inputs'],
-                                                             inputs['encoder_lengths'])
+        encoder_inputs = inputs['encoder_inputs'] + 1
+        encoder_lengths = inputs['encoder_lengths']
+        decoder_inputs = inputs['decoder_inputs'] + 1
+        decoder_lengths = inputs['decoder_lengths']
+
+        encoder_outputs, encoder_state = self._build_encoder(encoder_inputs, encoder_lengths)
         decoder_outputs, decoder_result_ids, decoder_state, decoder_sequence_lengths = \
-            self._build_decoder(encoder_outputs, encoder_state,
-                                inputs['encoder_lengths'],
-                                inputs['decoder_inputs'],
-                                inputs['decoder_lengths'],
-                                self.config['training']['is_training'])
+            self._build_decoder(encoder_outputs, encoder_state, encoder_lengths,
+                                decoder_inputs, decoder_lengths, self.config['training']['is_training'])
         self.decoder_outputs = decoder_outputs
         self.decoder_result_ids = decoder_result_ids
 
-        seq_loss = self._build_loss(decoder_outputs, inputs['decoder_inputs'], inputs['decoder_lengths'])
+        seq_loss = self._build_loss(decoder_outputs, decoder_inputs, decoder_lengths)
         train_step = self._build_train_step(seq_loss)
         self.loss = seq_loss
-        self.step = train_step
+        self.train_op = train_step
 
     @property
     def inputs(self):
@@ -132,7 +134,7 @@ class Seq2SeqModel:
     def _build_decoder(self, encoder_outputs, encoder_final_state, encoder_lengths,
                        decoder_inputs, decoder_lengths, is_training):
 
-        batch_size = tf.shape(decoder_inputs)[0]
+        batch_size, decoder_time = tf.unstack(tf.shape(decoder_inputs))
 
         with tf.variable_scope('decoder_cell'):
             state_size = self.config['decoder']['state_size']
@@ -201,7 +203,7 @@ class Seq2SeqModel:
                 decoder_outputs, decoder_state, decoder_sequence_outputs = \
                     dynamic_decode(
                         decoder,
-                        maximum_iterations=self.config['decoder']['max_iteration']
+                        # maximum_iterations=self.config['decoder']['max_iteration'] / TrainingHelper stops decode
                     )
                 decoder_outputs, decoder_sample_ids = decoder_outputs
 
@@ -211,23 +213,18 @@ class Seq2SeqModel:
         return decoder_outputs, decoder_sample_ids, decoder_state, decoder_sequence_outputs
 
     def _build_loss(self, decoder_logits, decoder_inputs, decoder_lengths):
-        max_iteration = self.config['decoder']['max_iteration']
         with tf.variable_scope('loss_target'):
             #build decoder output, with appropriate padding and mask
-            #should be aware that the second dimension of decoder_inputs + 1 <= max_iteration
-            batch_size, decoder_time = tf.unstack(tf.shape(decoder_inputs))
-            pad_time = max_iteration - decoder_time
+            max_decoder_time = tf.reduce_max(decoder_lengths) + 1
+            decoder_target = decoder_inputs[:, :max_decoder_time]
 
-            decoder_pad = tf.ones((batch_size, pad_time), dtype=tf.int32) * self.PAD
-            decoder_target = tf.concat([decoder_inputs, decoder_pad], 1)
-
-            decoder_eos = tf.one_hot(decoder_lengths, depth=max_iteration,
+            decoder_eos = tf.one_hot(decoder_lengths, depth=max_decoder_time,
                                      on_value=self.EOS, off_value=self.PAD,
                                      dtype=tf.int32)
             decoder_target += decoder_eos
 
             decoder_loss_mask = tf.sequence_mask(decoder_lengths + 1,
-                                                 maxlen=max_iteration,
+                                                 maxlen=max_decoder_time,
                                                  dtype=tf.float32)
 
         with tf.variable_scope('loss'):
@@ -255,4 +252,3 @@ class Seq2SeqModel:
                 train_op = tf.no_op(name='train_step')
 
         return train_op
-
