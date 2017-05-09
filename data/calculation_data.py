@@ -32,7 +32,7 @@ class CalculationSeqData(SeqData):
         """
         assert max_digit >= 1
 
-        self.symbols = "_0123456789+-"  # 0 for pad
+        self.symbols = "_E0123456789+-"  # 0 for pad, 1 for eos
         symbol_mapper = {c: i for i, c in enumerate(self.symbols)}
 
         int_max = 1

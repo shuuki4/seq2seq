@@ -22,9 +22,9 @@ class Seq2SeqModel:
 
     def _build_graph(self):
         inputs = self._build_placeholder()
-        encoder_inputs = inputs['encoder_inputs'] + 1
+        encoder_inputs = inputs['encoder_inputs']
         encoder_lengths = inputs['encoder_lengths']
-        decoder_inputs = inputs['decoder_inputs'] + 1
+        decoder_inputs = inputs['decoder_inputs']
         decoder_lengths = inputs['decoder_lengths']
 
         encoder_outputs, encoder_state = self._build_encoder(encoder_inputs, encoder_lengths)

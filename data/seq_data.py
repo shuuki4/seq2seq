@@ -7,12 +7,15 @@ class SeqData:
     Data class interface for seq2seq model
     """
 
+    PAD = 0
+    EOS = 1
+
     def __init__(self):
         """
         Data format should be [(from_sequence, to_sequence), ....]
         """
         self.max_length = None
-        self.symbols = None
+        self.symbols = None  # 0 always should be 'PAD', 1 always should be 'EOS'
 
         self.train_sequences = list()
         self.val_sequences = list()
@@ -102,6 +105,16 @@ class SeqData:
         """
         assert self.initialized, "Dataset is not initialized!"
         return self._data_iterator(self.val_sequences, batch_size, random)
+
+    def interpret(self, ids):
+        real_ids = []
+        for _id in ids:
+            if _id != self.EOS:
+                real_ids.append(_id)
+            else:
+                break
+
+        return ''.join(self.symbols[ri] for ri in real_ids)
 
     def build(self):
         """
