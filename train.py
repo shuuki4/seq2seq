@@ -7,26 +7,13 @@ from data.calculation_data import CalculationSeqData
 from util import log
 
 
-def interpret_result(input_ids, output_ids, symbols, eos_idx, show=3):
+def interpret_result(input_ids, output_ids, dataset, show=3):
     for i in range(show):
-        input_idxs = []
-        for j in input_ids[i]:
-            if j != 0:
-                input_idxs.append(j)
-            else:
-                break
+        input_sequence = dataset.interpret(input_ids[i]).replace(dataset.symbols[0], '')
+        output_sequence = dataset.interpret(output_ids[i])
 
-        output_idxs = []
-        for j in output_ids[i]:
-            if j != eos_idx:
-                extra = 1 if j > eos_idx else 0
-                output_idxs.append(j - extra)
-            else:
-                break
-
-        input_sequence = ''.join([symbols[idx] for idx in input_idxs])
-        output_sequence = ''.join([symbols[idx] for idx in output_idxs])
-        print('{} -> {}'.format(input_sequence, output_sequence))
+        # temporary for calculation seq data
+        print('{} -> {} (Real: {})'.format(input_sequence, output_sequence, eval(input_sequence)))
 
 if __name__ == '__main__':
 
@@ -60,5 +47,4 @@ if __name__ == '__main__':
                                      all_step=all_step,
                                      loss=loss_value))
 
-                    interpret_result(data_dict['encoder_inputs'], decoder_result_ids,
-                                     dataset.symbols, model.EOS)
+                    interpret_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)

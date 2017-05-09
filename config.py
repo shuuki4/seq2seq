@@ -20,7 +20,7 @@ class Config:
 
         # word embedding config
         self.config['word'] = word_config = dict()
-        word_config['num_word'] = num_words + 1  # add eos
+        word_config['num_word'] = num_words
         word_config['embedding_dim'] = word_embedding_dim
 
         # encoder config
