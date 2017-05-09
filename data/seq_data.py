@@ -104,6 +104,9 @@ class SeqData:
         :return: validation data iterator
         """
         assert self.initialized, "Dataset is not initialized!"
+        # for convenience
+        assert len(self.val_sequences) % batch_size == 0
+
         return self._data_iterator(self.val_sequences, batch_size, random)
 
     def interpret(self, ids):

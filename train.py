@@ -15,6 +15,24 @@ def interpret_result(input_ids, output_ids, dataset, show=3):
         # temporary for calculation seq data
         print('{} -> {} (Real: {})'.format(input_sequence, output_sequence, eval(input_sequence)))
 
+
+def eval_result(input_ids, output_ids, dataset):
+    _right, _wrong = 0.0, 0.0
+    for i in range(len(input_ids)):
+        input_sequence = dataset.interpret(input_ids[i]).replace(dataset.symbols[0], '')
+        output_sequence = dataset.interpret(output_ids[i])
+
+        try:
+            if eval(input_sequence) == int(output_sequence):
+                _right += 1.0
+            else:
+                _wrong += 1.0
+        except ValueError:  # output_sequence == ''
+            _wrong += 1.0
+
+    return _right, _wrong
+
+
 if __name__ == '__main__':
 
     ##just train calculation dataset
@@ -48,3 +66,14 @@ if __name__ == '__main__':
                                      loss=loss_value))
 
                     interpret_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)
+
+            right, wrong = 0.0, 0.0
+            for step, data_dict in enumerate(dataset.val_datas(batch_size)):
+                feed_dict = model.make_feed_dict(data_dict)
+                decoder_result_ids = sess.run(model.decoder_result_ids, feed_dict)
+
+                now_right, now_wrong = eval_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)
+                right += now_right
+                wrong += now_wrong
+
+            log.infov("Right: {}, Wrong: {}, Accuracy: {:.2}%".format(right, wrong, 100*right/(right+wrong)))
