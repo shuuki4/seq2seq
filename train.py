@@ -2,6 +2,7 @@ import tensorflow as tf
 from math import ceil
 
 from model import Seq2SeqModel
+from queue_inputs import enqueue
 from config import Config
 from data.calculation_data import CalculationSeqData
 from util import log
@@ -35,45 +36,65 @@ def eval_result(input_ids, output_ids, dataset):
 
 if __name__ == '__main__':
 
-    ##just train calculation dataset
     dataset = CalculationSeqData()
     dataset.build()
 
     config = Config(is_training=True, num_words=dataset.num_symbols,
-                    word_embedding_dim=30, rnn_state_size=30,
-                    max_iteration=dataset.max_length + 1)
-    model = Seq2SeqModel(config)
+                    word_embedding_dim=30, rnn_state_size=100,
+                    max_iteration=dataset.max_length + 1,
+                    batch_size=128)
 
     max_epoch = 100
-    batch_size = 16
-    all_step = int(ceil(dataset.num_train_examples / batch_size))
+    batch_size = config['training']['batch_size']
+    steps_in_epoch = int(ceil(dataset.num_train_examples / batch_size))
+
+    with tf.device("/cpu:0"):
+        input_queue = tf.FIFOQueue(
+            capacity=5 * batch_size,
+            dtypes=[tf.int32, tf.int32, tf.int32, tf.int32],
+            shapes=[[dataset.max_length], [], [dataset.max_length], []]
+        )
+        input_batch = tf.train.shuffle_batch(
+            input_queue.dequeue(),
+            batch_size=batch_size,
+            num_threads=1,
+            capacity=20 * batch_size,
+            min_after_dequeue=4 * batch_size
+        )
+
+    model = Seq2SeqModel(config, input_batch)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+        coord = tf.train.Coordinator()
 
+        input_thread = enqueue(sess, input_queue, dataset, coord, max_epoch)
+        input_thread.start()
+        tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        step = 0
         log.warning("Training Start!")
-        for epoch in range(1, max_epoch+1):
-            log.warning("Epoch {}".format(epoch))
-            for step, data_dict in enumerate(dataset.train_datas(batch_size)):
-                feed_dict = model.make_feed_dict(data_dict)
-                _, decoder_result_ids, loss_value = \
-                    sess.run([model.train_op, model.decoder_result_ids, model.loss], feed_dict)
+        try:
+            while not coord.should_stop():
+                if step % steps_in_epoch == 0:
+                    log.warning("Epoch {}".format(int(step / steps_in_epoch) + 1))
 
-                if (step + 1) % 1000 == 0:
+                _, encoder_inputs, decoder_result_ids, loss_value = \
+                    sess.run([model.train_op, model.encoder_inputs,
+                              model.decoder_result_ids, model.loss])
+
+                if (step + 1) % 300 == 0:
                     log.info("Step {cur_step:6d} / {all_step:6d} ... Loss: {loss:.5f}"
-                             .format(cur_step=step+1,
-                                     all_step=all_step,
+                             .format(cur_step=(step+1) % steps_in_epoch,
+                                     all_step=steps_in_epoch,
                                      loss=loss_value))
+                    interpret_result(encoder_inputs, decoder_result_ids, dataset)
 
-                    interpret_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)
+                step += 1
 
-            right, wrong = 0.0, 0.0
-            for step, data_dict in enumerate(dataset.val_datas(batch_size)):
-                feed_dict = model.make_feed_dict(data_dict)
-                decoder_result_ids = sess.run(model.decoder_result_ids, feed_dict)
+        except tf.errors.OutOfRangeError:
+            print("Done training!")
+        finally:
+            coord.request_stop()
 
-                now_right, now_wrong = eval_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)
-                right += now_right
-                wrong += now_wrong
-
-            log.infov("Right: {}, Wrong: {}, Accuracy: {:.2}%".format(right, wrong, 100*right/(right+wrong)))
+        coord.join([input_thread])

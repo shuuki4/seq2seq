@@ -14,18 +14,15 @@ class Seq2SeqModel:
     PAD = 0
     EOS = 1
 
-    def __init__(self, config):
+    def __init__(self, config, input_batch):
         self.config = config
         self._inputs = {}
 
-        self._build_graph()
+        self._build_graph(input_batch)
 
-    def _build_graph(self):
-        inputs = self._build_placeholder()
-        encoder_inputs = inputs['encoder_inputs']
-        encoder_lengths = inputs['encoder_lengths']
-        decoder_inputs = inputs['decoder_inputs']
-        decoder_lengths = inputs['decoder_lengths']
+    def _build_graph(self, input_batch):
+        encoder_inputs, encoder_lengths, decoder_inputs, decoder_lengths = input_batch
+        self.encoder_inputs = encoder_inputs
 
         encoder_outputs, encoder_state = self._build_encoder(encoder_inputs, encoder_lengths)
         decoder_outputs, decoder_result_ids, decoder_state, decoder_sequence_lengths = \
@@ -39,10 +36,6 @@ class Seq2SeqModel:
         self.loss = seq_loss
         self.train_op = train_step
 
-    @property
-    def inputs(self):
-        return self._inputs
-
     def make_feed_dict(self, data_dict):
         feed_dict = {}
         for key in data_dict.keys():
@@ -52,6 +45,7 @@ class Seq2SeqModel:
                 raise ValueError('Unexpected argument in input dictionary!')
         return feed_dict
 
+    """
     def _build_placeholder(self):
         self._inputs['encoder_inputs'] = tf.placeholder(
             shape=(None, None), # batch_size, max_time
@@ -75,6 +69,7 @@ class Seq2SeqModel:
         )
 
         return self._inputs
+    """
 
     def _build_encoder(self, encoder_inputs, encoder_lengths):
 

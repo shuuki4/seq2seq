@@ -3,7 +3,7 @@ class Config:
 
     def __init__(self,
                  is_training, num_words,
-                 learning_rate=0.001, word_embedding_dim=100,
+                 learning_rate=0.01, batch_size=128, word_embedding_dim=100,
                  cell_type='LSTM',
                  rnn_state_size=100, encoder_bidirection=True,
                  max_iteration=10,
@@ -17,6 +17,7 @@ class Config:
         self.config['training'] = training_config = dict()
         training_config['is_training'] = is_training
         training_config['learning_rate'] = learning_rate
+        training_config['batch_size'] = batch_size
 
         # word embedding config
         self.config['word'] = word_config = dict()

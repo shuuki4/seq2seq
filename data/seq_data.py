@@ -40,9 +40,9 @@ class SeqData:
     def initialized(self):
         return (self.max_length is not None) or (self.num_symbols is not None)
 
-    def _next_batch(self, data, batch_idxs, batch_size):
+    def _next_batch(self, data, batch_idxs):
         """
-        Generate next batch. If len(batch_idxs) < batch_size, pad with empty sequences
+        Generate next batch.
         :param data: data list to process
         :param batch_idxs: idxs to process
         :return: next data dict of batch_size amount data
@@ -53,8 +53,6 @@ class SeqData:
         def _empty_data():
             return _normalize_length([])
 
-        assert(len(batch_idxs) <= batch_size)
-
         from_data, from_lengths, to_data, to_lengths = [], [], [], []
         for idx in batch_idxs:
             from_sequence, to_sequence = data[idx]
@@ -62,12 +60,6 @@ class SeqData:
             to_lengths.append(len(to_sequence))
             from_data.append(_normalize_length(from_sequence))
             to_data.append(_normalize_length(to_sequence))
-
-        for _ in range(batch_size - len(batch_idxs)):
-            from_lengths.append(0)
-            to_lengths.append(0)
-            from_data.append(_empty_data())
-            to_data.append(_empty_data())
 
         batch_data_dict = {
             'encoder_inputs': np.asarray(from_data, dtype=np.int32),
@@ -84,7 +76,7 @@ class SeqData:
 
         for start_idx in range(0, len(sequence), batch_size):
             end_idx = start_idx + batch_size
-            yield self._next_batch(sequence, idxs[start_idx:end_idx], batch_size)
+            yield self._next_batch(sequence, idxs[start_idx:end_idx])
 
     def train_datas(self, batch_size=16, random=True):
         """
@@ -108,6 +100,14 @@ class SeqData:
         assert len(self.val_sequences) % batch_size == 0
 
         return self._data_iterator(self.val_sequences, batch_size, random)
+
+    def train_data_by_idx(self, start, end):
+        assert start >= 0 and end <= len(self.train_sequences)
+        return self._next_batch(self.train_sequences, range(start, end))
+
+    def val_data_by_idx(self, start, end):
+        assert start >= 0 and end < len(self.val_sequences)
+        return self._next_batch(self.val_sequences, range(start, end))
 
     def interpret(self, ids):
         real_ids = []
