@@ -6,9 +6,9 @@ class Config:
                  learning_rate=0.01, batch_size=128, word_embedding_dim=100,
                  cell_type='LSTM',
                  rnn_state_size=100, encoder_bidirection=True,
-                 max_iteration=10,
+                 beam_width=5, max_iteration=10,
                  attention=True, attention_type='Bahdanau',
-                 attention_num_units=100, attention_depth=3):
+                 attention_num_units=100, attention_depth=100):
 
         self.config = dict()
         assert cell_type in ['LSTM', 'GRU']
@@ -34,6 +34,7 @@ class Config:
         self.config['decoder'] = decoder_config = dict()
         decoder_config['cell_type'] = cell_type
         decoder_config['state_size'] = rnn_state_size
+        decoder_config['beam_width'] = beam_width
         decoder_config['max_iteration'] = max_iteration
 
         # attention config
