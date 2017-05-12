@@ -76,7 +76,11 @@ class SeqData:
 
         for start_idx in range(0, len(sequence), batch_size):
             end_idx = start_idx + batch_size
-            yield self._next_batch(sequence, idxs[start_idx:end_idx])
+            next_batch = self._next_batch(sequence, idxs[start_idx:end_idx])
+
+            # return batch only if the size of batch is original batch size
+            if len(next_batch['encoder_inputs']) == batch_size:
+                yield next_batch
 
     def train_datas(self, batch_size=16, random=True):
         """
@@ -96,9 +100,6 @@ class SeqData:
         :return: validation data iterator
         """
         assert self.initialized, "Dataset is not initialized!"
-        # for convenience
-        assert len(self.val_sequences) % batch_size == 0
-
         return self._data_iterator(self.val_sequences, batch_size, random)
 
     def train_data_by_idx(self, start, end):

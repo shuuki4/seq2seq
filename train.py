@@ -1,5 +1,5 @@
 import tensorflow as tf
-from math import ceil
+from math import ceil, floor
 
 from model import Seq2SeqModel
 from queue_inputs import enqueue
@@ -46,8 +46,9 @@ if __name__ == '__main__':
 
     max_epoch = 100
     batch_size = config['training']['batch_size']
-    steps_in_epoch = int(ceil(dataset.num_train_examples / batch_size))
+    steps_in_epoch = int(floor(dataset.num_train_examples / batch_size))
 
+    """
     with tf.device("/cpu:0"):
         input_queue = tf.FIFOQueue(
             capacity=5 * batch_size,
@@ -61,11 +62,43 @@ if __name__ == '__main__':
             capacity=20 * batch_size,
             min_after_dequeue=4 * batch_size
         )
+    """
 
-    model = Seq2SeqModel(config, input_batch)
+    model = Seq2SeqModel(config, input_batch=None)
 
     with tf.Session() as sess:
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+
+        log.warning("Training Start!")
+        for epoch in range(1, max_epoch+1):
+            log.warning("Epoch {}".format(epoch))
+            for step, data_dict in enumerate(dataset.train_datas(batch_size)):
+                feed_dict = model.make_feed_dict(data_dict)
+                _, decoder_result_ids, loss_value = \
+                    sess.run([model.train_op, model.decoder_result_ids, model.loss], feed_dict)
+
+                if (step + 1) % 300 == 0:
+                    log.info("Step {cur_step:6d} / {all_step:6d} ... Loss: {loss:.5f}"
+                             .format(cur_step=step+1,
+                                     all_step=steps_in_epoch,
+                                     loss=loss_value))
+
+                    interpret_result(data_dict['encoder_inputs'], decoder_result_ids, dataset)
+
+            right, wrong = 0.0, 0.0
+            for step, data_dict in enumerate(dataset.val_datas(batch_size)):
+                feed_dict = model.make_feed_dict(data_dict)
+                beam_result_ids = sess.run(model.beam_search_result_ids, feed_dict)[:, :, 0]
+                if step == 0:
+                    print(data_dict['decoder_inputs'][:5])
+                    print(beam_result_ids[:5])
+                now_right, now_wrong = eval_result(data_dict['encoder_inputs'], beam_result_ids, dataset)
+                right += now_right
+                wrong += now_wrong
+
+            log.infov("Right: {}, Wrong: {}, Accuracy: {:.2}%".format(right, wrong, 100*right/(right+wrong)))
+
+        """
         coord = tf.train.Coordinator()
 
         input_thread = enqueue(sess, input_queue, dataset, coord, max_epoch)
@@ -98,3 +131,4 @@ if __name__ == '__main__':
             coord.request_stop()
 
         coord.join([input_thread])
+        """

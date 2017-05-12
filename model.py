@@ -217,7 +217,8 @@ class Seq2SeqModel:
                         self.config['attention']['attention_num_units'],
                         tiled_encoder_outputs,
                         tiled_encoder_lengths,
-                        name="attention_fn"
+                        name="attention_fn",
+                        reuse=True
                     )
                     beam_decoder_cell = AttentionWrapper(
                         original_decoder_cell,
@@ -329,10 +330,8 @@ class Seq2SeqModel:
             train_variables = tf.trainable_variables()
             grads_vars = opt.compute_gradients(loss, train_variables)
             for i, (grad, var) in enumerate(grads_vars):
-                try:
-                    grads_vars[i] = (tf.clip_by_norm(grad, 1.0), var)
-                except ValueError:
-                    print(var)
+                grads_vars[i] = (tf.clip_by_norm(grad, 1.0), var)
+
             apply_gradient_op = opt.apply_gradients(grads_vars)
             with tf.control_dependencies([apply_gradient_op]):
                 train_op = tf.no_op(name='train_step')
