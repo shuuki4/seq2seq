@@ -48,22 +48,6 @@ if __name__ == '__main__':
     batch_size = config['training']['batch_size']
     steps_in_epoch = int(floor(dataset.num_train_examples / batch_size))
 
-    """
-    with tf.device("/cpu:0"):
-        input_queue = tf.FIFOQueue(
-            capacity=5 * batch_size,
-            dtypes=[tf.int32, tf.int32, tf.int32, tf.int32],
-            shapes=[[dataset.max_length], [], [dataset.max_length], []]
-        )
-        input_batch = tf.train.shuffle_batch(
-            input_queue.dequeue(),
-            batch_size=batch_size,
-            num_threads=1,
-            capacity=20 * batch_size,
-            min_after_dequeue=4 * batch_size
-        )
-    """
-
     model = Seq2SeqModel(config, input_batch=None)
 
     with tf.Session() as sess:
@@ -97,38 +81,3 @@ if __name__ == '__main__':
                 wrong += now_wrong
 
             log.infov("Right: {}, Wrong: {}, Accuracy: {:.2}%".format(right, wrong, 100*right/(right+wrong)))
-
-        """
-        coord = tf.train.Coordinator()
-
-        input_thread = enqueue(sess, input_queue, dataset, coord, max_epoch)
-        input_thread.start()
-        tf.train.start_queue_runners(sess=sess, coord=coord)
-
-        step = 0
-        log.warning("Training Start!")
-        try:
-            while not coord.should_stop():
-                if step % steps_in_epoch == 0:
-                    log.warning("Epoch {}".format(int(step / steps_in_epoch) + 1))
-
-                _, encoder_inputs, decoder_result_ids, loss_value = \
-                    sess.run([model.train_op, model.encoder_inputs,
-                              model.decoder_result_ids, model.loss])
-
-                if (step + 1) % 300 == 0:
-                    log.info("Step {cur_step:6d} / {all_step:6d} ... Loss: {loss:.5f}"
-                             .format(cur_step=(step+1) % steps_in_epoch,
-                                     all_step=steps_in_epoch,
-                                     loss=loss_value))
-                    interpret_result(encoder_inputs, decoder_result_ids, dataset)
-
-                step += 1
-
-        except tf.errors.OutOfRangeError:
-            print("Done training!")
-        finally:
-            coord.request_stop()
-
-        coord.join([input_thread])
-        """

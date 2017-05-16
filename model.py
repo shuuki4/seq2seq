@@ -5,10 +5,8 @@ from tensorflow.contrib.rnn import LSTMCell, LSTMStateTuple, GRUCell
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.seq2seq import AttentionWrapper, AttentionWrapperState, \
                                        BasicDecoder, BeamSearchDecoder, dynamic_decode, \
-                                       TrainingHelper, sequence_loss, tile_batch
-
-from module.reusable_attention_mechanism import ReusableBahdanauAttention as BahdanauAttention
-from module.reusable_attention_mechanism import ReusableLuongAttention as LuongAttention
+                                       TrainingHelper, sequence_loss, tile_batch, \
+                                       BahdanauAttention, LuongAttention
 
 
 class Seq2SeqModel:
@@ -35,9 +33,10 @@ class Seq2SeqModel:
         self.beam_search_scores = decoder_result['beam_decoder_scores']
 
         seq_loss = self._build_loss(self.decoder_outputs, decoder_inputs, decoder_lengths)
-        train_step = self._build_train_step(seq_loss)
+        self.train_step, self.train_op = self._build_train_step(seq_loss)
         self.loss = seq_loss
-        self.train_op = train_step
+
+        self.summary_op = self._build_summary()
 
     def make_feed_dict(self, data_dict):
         feed_dict = {}
@@ -217,8 +216,7 @@ class Seq2SeqModel:
                         self.config['attention']['attention_num_units'],
                         tiled_encoder_outputs,
                         tiled_encoder_lengths,
-                        name="attention_fn",
-                        reuse=True
+                        name="attention_fn"
                     )
                     beam_decoder_cell = AttentionWrapper(
                         original_decoder_cell,
@@ -261,8 +259,8 @@ class Seq2SeqModel:
             decoder_outputs, decoder_state, decoder_sequence_lengths = \
                 dynamic_decode(
                     decoder,
-                    scope=tf.get_variable_scope()
-                    # maximum_iterations=self.config['decoder']['max_iteration'] / TrainingHelper stops decode
+                    scope=tf.get_variable_scope(),
+                    maximum_iterations=self.config['decoder']['max_iteration']
                 )
 
             tf.get_variable_scope().reuse_variables()
@@ -300,8 +298,11 @@ class Seq2SeqModel:
     def _build_loss(self, decoder_logits, decoder_inputs, decoder_lengths):
         with tf.variable_scope('loss_target'):
             #build decoder output, with appropriate padding and mask
+            batch_size = self.config['training']['batch_size']
+            pads = tf.ones([batch_size, 1], dtype=tf.int32) * self.PAD
+            paded_decoder_inputs = tf.concat([decoder_inputs, pads], 1)
             max_decoder_time = tf.reduce_max(decoder_lengths) + 1
-            decoder_target = decoder_inputs[:, :max_decoder_time]
+            decoder_target = paded_decoder_inputs[:, :max_decoder_time]
 
             decoder_eos = tf.one_hot(decoder_lengths, depth=max_decoder_time,
                                      on_value=self.EOS, off_value=self.PAD,
@@ -324,7 +325,21 @@ class Seq2SeqModel:
 
     def _build_train_step(self, loss):
         with tf.variable_scope('train'):
-            lr = self.config['training']['learning_rate']
+            train_step = tf.Variable(0, name='global_step', trainable=False)
+            lr = tf.train.exponential_decay(
+                self.config['training']['learning_rate'],
+                train_step,
+                self.config['training']['decay_steps'],
+                self.config['training']['decay_factor'],
+                staircase=True
+            )
+            lr = tf.clip_by_value(
+                lr,
+                self.config['training']['minimum_learning_rate'],
+                self.config['training']['learning_rate'],
+                name='lr_clip'
+            )
+            self.lr = lr
             opt = tf.train.AdamOptimizer(learning_rate=lr)
 
             train_variables = tf.trainable_variables()
@@ -332,8 +347,14 @@ class Seq2SeqModel:
             for i, (grad, var) in enumerate(grads_vars):
                 grads_vars[i] = (tf.clip_by_norm(grad, 1.0), var)
 
-            apply_gradient_op = opt.apply_gradients(grads_vars)
+            apply_gradient_op = opt.apply_gradients(grads_vars, global_step=train_step)
             with tf.control_dependencies([apply_gradient_op]):
                 train_op = tf.no_op(name='train_step')
 
-        return train_op
+        return train_step, train_op
+
+    def _build_summary(self):
+        tf.summary.scalar('learning_rate', self.lr)
+        tf.summary.scalar('loss', self.loss)
+
+        return tf.summary.merge_all()

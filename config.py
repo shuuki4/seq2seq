@@ -3,8 +3,9 @@ class Config:
 
     def __init__(self,
                  is_training, num_words,
-                 learning_rate=0.01, batch_size=128, word_embedding_dim=100,
-                 cell_type='LSTM',
+                 learning_rate=0.01, minimum_learning_rate=1e-5,
+                 batch_size=128, decay_steps=1e4, decay_factor=0.3,
+                 word_embedding_dim=100, cell_type='LSTM',
                  rnn_state_size=100, encoder_bidirection=True,
                  beam_width=5, max_iteration=10,
                  attention=True, attention_type='Bahdanau',
@@ -17,7 +18,10 @@ class Config:
         self.config['training'] = training_config = dict()
         training_config['is_training'] = is_training
         training_config['learning_rate'] = learning_rate
+        training_config['minimum_learning_rate'] = minimum_learning_rate
         training_config['batch_size'] = batch_size
+        training_config['decay_steps'] = decay_steps
+        training_config['decay_factor'] = decay_factor
 
         # word embedding config
         self.config['word'] = word_config = dict()

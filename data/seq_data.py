@@ -110,7 +110,7 @@ class SeqData:
         assert start >= 0 and end < len(self.val_sequences)
         return self._next_batch(self.val_sequences, range(start, end))
 
-    def interpret(self, ids):
+    def interpret(self, ids, join_string=''):
         real_ids = []
         for _id in ids:
             if _id != self.EOS:
@@ -118,7 +118,7 @@ class SeqData:
             else:
                 break
 
-        return ''.join(self.symbols[ri] for ri in real_ids)
+        return join_string.join(self.symbols[ri] for ri in real_ids)
 
     def build(self):
         """
